@@ -1,0 +1,28 @@
+[build-system]
+requires = [
+    "scikit-build-core >=0.4.3", 
+    "nanobind >=1.3.2"
+]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "nccl_mpi_benchmarks"
+version = "0.1.0"
+description = "NCCL MPI Benchmarks"
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [{name = "Wassim Kabalan"}]
+classifiers = ["License :: OSI Approved :: BSD License"]
+license.file = "LICENSE"
+keywords = ["nccl", "mpi", "benchmarks"]
+
+[tool.scikit-build]
+minimum-version = "0.8"
+cmake.version = ">=3.25"
+build-dir = "build/{wheel_tag}"
+wheel.py-api = "py3"
+cmake.build-type = "Release"
+
+
+[tool.scikit-build.cmake.define]
+CMAKE_EXPORT_COMPILE_COMMANDS = "ON"
