@@ -1,14 +1,15 @@
 [build-system]
 requires = [
     "scikit-build-core >=0.4.3", 
-    "nanobind >=1.3.2"
+    "nanobind >=1.3.2",
+    "jax >=0.4.31",
 ]
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "nccl_mpi_benchmarks"
+name = "butterfly_fft"
 version = "0.1.0"
-description = "NCCL MPI Benchmarks"
+description = "butterfly_fft"
 readme = "README.md"
 requires-python = ">=3.8"
 authors = [{name = "Wassim Kabalan"}]
@@ -21,7 +22,7 @@ minimum-version = "0.8"
 cmake.version = ">=3.25"
 build-dir = "build/{wheel_tag}"
 wheel.py-api = "py3"
-cmake.build-type = "Release"
+cmake.build-type = "Debug"
 
 
 [tool.scikit-build.cmake.define]

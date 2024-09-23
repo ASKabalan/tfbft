@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.19...3.25)
 
-
-project(NCCL_API_Bench LANGUAGES CXX CUDA)
+project(butterfly_fft LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
 # Set default build type to Release
@@ -11,9 +10,8 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 # if (NOT SKBUILD)
-#   # message(FATAL_ERROR "SKBUILD is not set")
+#     message(FATAL_ERROR "SKBUILD is not set")
 # endif()
-
 
 find_package(CUDAToolkit REQUIRED VERSION 12)
 set(NVHPC_CUDA_VERSION ${CUDAToolkit_VERSION_MAJOR}.${CUDAToolkit_VERSION_MINOR})
@@ -30,16 +28,24 @@ string(REPLACE "/lib64" "/include" NVHPC_NCCL_INCLUDE_DIR ${NVHPC_NCCL_LIBRARY_D
 find_package(Python 3.8
   REQUIRED COMPONENTS Interpreter Development.Module
   OPTIONAL_COMPONENTS Development.SABIModule)
-# Detect the installed nanobind package and import it into CMake
-find_package(nanobind CONFIG REQUIRED) 
 
+message(STATUS "Python_EXECUTABLE: ${Python_EXECUTABLE}")
+# Detect the installed nanobind package and import it into CMake
+execute_process(
+  COMMAND "${Python_EXECUTABLE}"
+          "-c" "from jax.extend import ffi; print(ffi.include_dir())"
+  OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE XLA_DIR)
+message(STATUS "XLA include directory: ${XLA_DIR}")
+
+find_package(nanobind CONFIG REQUIRED)
 # Include directories for the executable
-set(SOURCES csrc/src/extensions.cc csrc/src/gpu_ops.cu)
-nanobind_add_module(gpu_ops STABLE_ABI NB_STATIC ${SOURCES})
-set_target_properties(gpu_ops PROPERTIES CUDA_ARCHITECTURES "70;80;89")
-target_link_libraries(gpu_ops  PRIVATE NVHPC::CUDA MPI::MPI_CXX NVHPC::NCCL)
-target_include_directories(gpu_ops PUBLIC 
-                           csrc/include
+set(SOURCES src/csrc/extensions.cc src/csrc/gpu_ops.cu)
+# nanobind_add_module(gpu_ops STABLE_ABI NB_STATIC ${SOURCES})
+nanobind_add_module(butterfly_fft_lib SHARED ${SOURCES})
+set_target_properties(butterfly_fft_lib PROPERTIES CUDA_ARCHITECTURES "70;80;89")
+target_link_libraries(butterfly_fft_lib  PRIVATE NVHPC::CUDA MPI::MPI_CXX NVHPC::NCCL)
+target_include_directories(butterfly_fft_lib PUBLIC 
+                           src/csrc/include
                            ${XLA_DIR}
                            ${NVHPC_CUDA_INCLUDE_DIR}
                            ${NVHPC_MATH_INCLUDE_DIR}
@@ -47,7 +53,7 @@ target_include_directories(gpu_ops PUBLIC
                            ${NVHPC_NCCL_INCLUDE27_DIR}
                           )
 
-install(TARGETS gpu_ops LIBRARY DESTINATION nccl_mpi_benchmarks)
+install(TARGETS butterfly_fft_lib LIBRARY DESTINATION butterfly_fft)
 
 
 
