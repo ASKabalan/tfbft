@@ -1,5 +1,5 @@
-#ifndef COMM_INDEX_HPP
-#define COMM_INDEX_HPP
+#ifndef BUTTERFLY_COMM_INDEX_HPP
+#define BUTTERFLY_COMM_INDEX_HPP
 
 #include "common/checks.h" // Assuming you have NCCLCHECK defined here
 #include "nccl_ops.hpp" // Include the NCCLOps for accessing the main communicator
@@ -11,11 +11,11 @@
 #include <unordered_map>
 #include <vector>
 
-class comm_index {
+class ButterflyCommIndexImpl {
 public:
   // Singleton instance getter
-  static comm_index &instance() {
-    static comm_index instance;
+  static ButterflyCommIndexImpl &instance() {
+    static ButterflyCommIndexImpl instance;
     return instance;
   }
 
@@ -29,11 +29,11 @@ public:
 
 private:
   // Private constructor for singleton pattern
-  comm_index() = default;
+  ButterflyCommIndexImpl() = default;
 
   // Disallow copying and assignment
-  comm_index(const comm_index &) = delete;
-  comm_index &operator=(const comm_index &) = delete;
+  ButterflyCommIndexImpl(const ButterflyCommIndexImpl &) = delete;
+  ButterflyCommIndexImpl &operator=(const ButterflyCommIndexImpl &) = delete;
 
   // Function to generate the required communicators
   void generate_comms(size_t array_size) {
@@ -77,5 +77,14 @@ private:
   std::unordered_map<size_t, std::vector<ncclComm_t>>
       comms_db; // Unordered map to store communicators for each array size
 };
+
+// Public interface for ButterflyCommIndex
+
+namespace ButterflyCommIndex {
+static std::vector<ncclComm_t> get_or_create_comms(size_t array_size) {
+  return ButterflyCommIndexImpl::instance().get_or_create_comms(array_size);
+}
+
+} // namespace ButterflyCommIndex
 
 #endif // COMM_INDEX_HPP
