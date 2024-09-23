@@ -1,0 +1,3 @@
+[submodule "MatX"]
+	path = MatX
+	url = https://github.com/NVIDIA/MatX.git
