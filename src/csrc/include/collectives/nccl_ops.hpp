@@ -4,24 +4,30 @@
 #include <cuda_runtime.h>
 #include <iostream>
 
-#include <mpi.h>
 #include "mpi_ops.hpp"
-#define MPICHECK(cmd) do {                          \
-    int e = cmd;                                    \
-    if( e != MPI_SUCCESS ) {                        \
-        std::cerr << "Failed: MPI error " << __FILE__ << ":" << __LINE__ << " '" << e << "'" << std::endl; \
-        exit(EXIT_FAILURE);                         \
-    }                                               \
-} while(0)
+#include <mpi.h>
+#define MPICHECK(cmd)                                                          \
+  do {                                                                         \
+    int e = cmd;                                                               \
+    if (e != MPI_SUCCESS) {                                                    \
+      std::cerr << "Failed: MPI error " << __FILE__ << ":" << __LINE__ << " '" \
+                << e << "'" << std::endl;                                      \
+      exit(EXIT_FAILURE);                                                      \
+    }                                                                          \
+  } while (0)
 
 #include <nccl.h>
-#define NCCLCHECK(cmd) do {                         \
-    ncclResult_t r = cmd;                           \
-    if (r != ncclSuccess) {                         \
-        std::cerr << "Failed: NCCL error " << __FILE__ << ":" << __LINE__ << " '" << ncclGetErrorString(r) << "'" << std::endl; \
-        exit(EXIT_FAILURE);                         \
-    }                                               \
-} while(0)
+#define NCCLCHECK(cmd)                                                         \
+  do {                                                                         \
+    ncclResult_t r = cmd;                                                      \
+    if (r != ncclSuccess) {                                                    \
+      std::cerr << "Failed: NCCL error " << __FILE__ << ":" << __LINE__        \
+                << " '" << ncclGetErrorString(r) << "'" << std::endl;          \
+      exit(EXIT_FAILURE);                                                      \
+    }                                                                          \
+  } while (0)
+
+namespace CCO {
 
 class NCCLOpsImpl {
 public:
@@ -68,19 +74,15 @@ private:
 };
 
 // Public interface for NCCL operations
-class NCCLOps {
-public:
-  NCCLOps() = default;
+namespace NCCLOps {
 
-  ~NCCLOps() = default;
+static const int get_rank() { return NCCLOpsImpl::instance().get_rank(); }
 
-  int get_rank() const { return NCCLOpsImpl::instance().get_rank(); }
+static const int get_size() { return NCCLOpsImpl::instance().get_size(); }
 
-  int get_size() const { return NCCLOpsImpl::instance().get_size(); }
+static ncclComm_t get_comm() { return NCCLOpsImpl::instance().get_comm(); }
 
-  ncclComm_t get_comm() const { return NCCLOpsImpl::instance().get_comm(); }
-
-private:
-};
+} // namespace NCCLOps
+} // namespace CCO
 
 #endif // NCCL_OPS_H

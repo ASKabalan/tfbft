@@ -7,6 +7,16 @@
 #include "nccl.h"
 #include "nccl_ops.hpp"
 
+
+#define NCCLCHECK(cmd) do {                         \
+    ncclResult_t r = cmd;                           \
+    if (r != ncclSuccess) {                         \
+        std::cerr << "Failed: NCCL error " << __FILE__ << ":" << __LINE__ << " '" << ncclGetErrorString(r) << "'" << std::endl; \
+        exit(EXIT_FAILURE);                         \
+    }                                               \
+} while(0)
+
+
 namespace CCO {
 
 // Enum to abstract data types for both MPI and NCCL
@@ -158,10 +168,9 @@ public:
   void alltoall(T *sendbuf, T *recvbuf, size_t count, ncclComm_t comm,
                 cudaStream_t stream) {
 
-    NCCLOps nccl_ops;
-    const int &rank = nccl_ops.get_rank();
-    const int &nranks = nccl_ops.get_size();
-    const int chunk_size = count / nranks;
+    const int &rank = NCCLOps::get_rank();
+    const int &nranks = NCCLOps::get_size();
+    size_t chunk_size = count / nranks;
     ncclDataType_t dtype = Internal::get_nccl_type<T>();
     ncclGroupStart();
     for (int r = 0; r < nranks; r++) {

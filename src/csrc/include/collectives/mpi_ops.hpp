@@ -79,20 +79,15 @@ private:
 };
 
 // Public interface for MPI operations
-class MPIOps {
-public:
-  MPIOps() { MPIOpsImpl::instance(); };
+namespace MPIOps {
 
-  virtual ~MPIOps() = default;
+static MPI_Comm get_comm() { return MPIOpsImpl::instance().get_comm(); }
 
-  MPI_Comm get_comm() { return MPIOpsImpl::instance().get_comm(); }
+static const int get_rank() { return MPIOpsImpl::instance().get_rank(); }
 
-  int get_rank() const { return MPIOpsImpl::instance().get_rank(); }
+static const int get_size() { return MPIOpsImpl::instance().get_size(); }
 
-  int get_size() const { return MPIOpsImpl::instance().get_size(); }
-
-private:
-};
+} // namespace MPIOps
 
 } // namespace CCO
 #endif // MPI_OPS_H

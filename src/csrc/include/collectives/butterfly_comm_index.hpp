@@ -38,10 +38,9 @@ private:
   // Function to generate the required communicators
   void generate_comms(size_t array_size) {
 
-    NCCLOps nccl_ops;
-    const int &size = nccl_ops.get_size();
-    const int &rank = nccl_ops.get_rank();
-    ncclComm_t base_comm = nccl_ops.get_comm();
+    const int &size = CCO::NCCLOps::get_size();
+    const int &rank = CCO::NCCLOps::get_rank();
+    ncclComm_t base_comm = CCO::NCCLOps::get_comm();
 
     int num_stages = std::log2(size);
     std::vector<ncclComm_t> comms_list;
