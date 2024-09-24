@@ -1,7 +1,6 @@
 
 #include <cute/tensor.hpp>
 #include "xla/ffi/api/ffi.h"
-#include "xla/ffi/api/ffi_helper.h"
 
 namespace ffi = xla::ffi;
 using namespace cute;
