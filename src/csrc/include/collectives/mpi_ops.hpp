@@ -3,7 +3,6 @@
 
 #include <cuda_runtime.h>
 #include <iostream>
-#include <mpi-ext.h>
 #include <mpi.h>
 #define MPICHECK(cmd)                                                          \
   do {                                                                         \
@@ -57,12 +56,6 @@ private:
     // Initialize MPI rank and size
     MPICHECK(MPI_Comm_rank(mpi_comm, &rank));
     MPICHECK(MPI_Comm_size(mpi_comm, &size));
-
-    if (1 == MPIX_Query_cuda_support()) {
-      printf("This MPI library has CUDA-aware support.\n");
-    } else {
-      printf("This MPI library does not have CUDA-aware support.\n");
-    }
 
     isInitialized = true;
   }

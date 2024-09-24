@@ -9,22 +9,40 @@
 #include <iomanip>
 #include <string>
 #include <type_traits>
-#include "collective_ops.hpp"
 
 namespace ffi = xla::ffi;
 namespace nb = nanobind;
 
-ffi::Error XlaCallImpl(cudaStream_t stream, ffi::Buffer<ffi::DataType::F32> x,
+ffi::Error AllReduceNCCLImpl(cudaStream_t stream, ffi::Buffer<ffi::DataType::F32> x,
                        ffi::Result<ffi::Buffer<ffi::DataType::F32>> y) {
 
   CCO::CollectiveOps ops;
-  CCO::ReductionOp<float> op(CCO::ReductionOp<float>::Type::SUM);
-  ops.allreduce(x.typed_data() , y->typed_data(), x.element_count(), op, stream);
+  CCO::ReductionOp op(CCO::ReducType::SUM);
+  ncclComm_t comm = CCO::NCCLOps::get_comm();
+  ops.allreduce(x.typed_data() , y->typed_data(), x.element_count(), op, comm , stream);
 
   return ffi::Error::Success();
 }
 
-XLA_FFI_DEFINE_HANDLER_SYMBOL(XlaCall, XlaCallImpl,
+ffi::Error AllReduceMPIImpl(cudaStream_t stream,ffi::Buffer<ffi::DataType::F32> x,
+                       ffi::Result<ffi::Buffer<ffi::DataType::F32>> y) {
+
+  CCO::CollectiveOps ops;
+  CCO::ReductionOp op(CCO::ReducType::SUM);
+  MPI_Comm mpi_comm = CCO::MPIOps::get_comm();
+  ops.allreduce(x.typed_data() , y->typed_data(), x.element_count(), op, mpi_comm);
+
+  return ffi::Error::Success();
+}
+
+XLA_FFI_DEFINE_HANDLER_SYMBOL(AllReduceNCCL, AllReduceNCCLImpl,
+                              ffi::Ffi::Bind()
+                                  .Ctx<ffi::PlatformStream<cudaStream_t>>()
+                                  .Arg<ffi::Buffer<ffi::DataType::F32>>() // x
+                                  .Ret<ffi::Buffer<ffi::DataType::F32>>() // y
+);
+
+XLA_FFI_DEFINE_HANDLER_SYMBOL(AllReduceMPI, AllReduceMPIImpl,
                               ffi::Ffi::Bind()
                                   .Ctx<ffi::PlatformStream<cudaStream_t>>()
                                   .Arg<ffi::Buffer<ffi::DataType::F32>>() // x
@@ -41,7 +59,8 @@ template <typename T> nb::capsule EncapsulateFfiCall(T *fn) {
 
 nb::dict Registrations() {
   nb::dict d;
-  d["xla_call"] = EncapsulateFfiCall(XlaCall);
+  d["all_reduce_nccl"] = EncapsulateFfiCall(AllReduceNCCL);
+  d["all_reduce_mpi"] = EncapsulateFfiCall(AllReduceMPI);
   return d;
 }
 

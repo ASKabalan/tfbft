@@ -6,17 +6,8 @@
 
 #include "mpi_ops.hpp"
 #include <mpi.h>
-#define MPICHECK(cmd)                                                          \
-  do {                                                                         \
-    int e = cmd;                                                               \
-    if (e != MPI_SUCCESS) {                                                    \
-      std::cerr << "Failed: MPI error " << __FILE__ << ":" << __LINE__ << " '" \
-                << e << "'" << std::endl;                                      \
-      exit(EXIT_FAILURE);                                                      \
-    }                                                                          \
-  } while (0)
-
 #include <nccl.h>
+
 #define NCCLCHECK(cmd)                                                         \
   do {                                                                         \
     ncclResult_t r = cmd;                                                      \
@@ -51,10 +42,9 @@ public:
 private:
   NCCLOpsImpl() : rank(-1), size(-1), isInitialized(false) {
     // Initialize NCCL rank and size
-    MPIOps mpiOps;
-    const int &rank = mpiOps.get_rank();
-    const int &size = mpiOps.get_size();
-    MPI_Comm mpicomm = mpiOps.get_comm();
+    const int &rank = MPIOps::get_rank();
+    const int &size = MPIOps::get_size();
+    MPI_Comm mpicomm = MPIOps::get_comm();
     ncclUniqueId id;
     if (rank == 0)
       ncclGetUniqueId(&id);
