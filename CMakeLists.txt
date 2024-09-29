@@ -18,7 +18,7 @@ set(NVHPC_CUDA_VERSION ${CUDAToolkit_VERSION_MAJOR}.${CUDAToolkit_VERSION_MINOR}
 
 find_package(MPI REQUIRED)
 find_package(NVHPC REQUIRED COMPONENTS MATH NCCL)
-add_subdirectory(MatX)
+add_subdirectory(third_party/MatX)
 
 string(REPLACE "/lib64" "/include" NVHPC_CUDA_INCLUDE_DIR ${NVHPC_CUDA_LIBRARY_DIR})
 string(REPLACE "/lib64" "/include" NVHPC_MATH_INCLUDE_DIR ${NVHPC_MATH_LIBRARY_DIR})
