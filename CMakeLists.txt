@@ -40,7 +40,7 @@ message(STATUS "XLA include directory: ${XLA_DIR}")
 
 find_package(nanobind CONFIG REQUIRED)
 # Include directories for the executable
-set(SOURCES src/csrc/extensions.cc src/csrc/gpu_ops.cu)
+set(SOURCES src/csrc/extensions.cc src/csrc/butterfly_fft.cu src/csrc/bit_reverse.cu src/csrc/collectives.cc)
 # nanobind_add_module(gpu_ops STABLE_ABI NB_STATIC ${SOURCES})
 nanobind_add_module(butterfly_fft_lib SHARED ${SOURCES})
 set_target_properties(butterfly_fft_lib PROPERTIES CUDA_ARCHITECTURES "70;80;89")
