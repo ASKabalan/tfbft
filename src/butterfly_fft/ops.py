@@ -25,3 +25,18 @@ def all_reduce_mpi(operand):
                             out_type,
                             operand,
                             vectorized=False)
+
+
+def butterfly_fft(operand):
+
+    assert operand.dtype == jnp.float32, f"operand should be of type float32"
+
+    out_type = jax.ShapeDtypeStruct(operand.shape, operand.dtype)
+
+    return jex.ffi.ffi_call("butterfly_fft_f32",
+                            out_type,
+                            operand,
+                            direction=1,
+                            norm=1,
+                            axis=0,
+                            vectorized=False)
