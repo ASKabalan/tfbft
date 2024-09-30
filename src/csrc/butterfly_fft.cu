@@ -21,11 +21,51 @@ template <typename T> __global__ void AddElementKernel(T *x, T *y, int n) {
 }
 
 template <DataType dtype>
+ffi::Error ButterFlyForward(cudaStream_t stream, Buffer<DataType::F32> x,
+                            NORM iNorm, Result<dtype> y, CommIterator &comms) {
+
+  CCO::CollectiveOps ops;
+  CCO::ReductionOp reduc_op{CCO::ReducType::SUM};
+  auto comm = comms.next();
+  assertm(comm.has_value(),
+          "[INTERNAL] Distributed FFT called without Buttefly comms");
+
+  ops.allreduce(x.typed_data(), y->typed_data(), x.element_count(), reduc_op,
+                comm.value(), stream);
+
+  while ((comm = comms.next())) {
+    ops.allreduce(y->typed_data(), y->typed_data(), x.element_count(), reduc_op,
+                  comm.value(), stream);
+  }
+  return ffi_with_cuda_error_check();
+}
+
+template <DataType dtype>
+ffi::Error ButterFlyBackward(cudaStream_t stream, Buffer<DataType::F32> x,
+                             NORM iNorm, Result<dtype> y, CommIterator &comms) {
+
+  CCO::CollectiveOps ops;
+  CCO::ReductionOp reduc_op{CCO::ReducType::SUM};
+  comms.reset();
+  auto comm = comms.prev();
+  assertm(comm.has_value(),
+          "[INTERNAL] Distributed IFFT called without Buttefly comms");
+
+  ops.allreduce(x.typed_data(), y->typed_data(), x.element_count(), reduc_op,
+                comm.value(), stream);
+
+  while ((comm = comms.prev())) {
+    ops.allreduce(y->typed_data(), y->typed_data(), x.element_count(), reduc_op,
+                  comm.value(), stream);
+  }
+  return ffi_with_cuda_error_check();
+}
+
+template <DataType dtype>
 ffi::Error ButterFlyFFT(cudaStream_t stream, Buffer<DataType::F32> x,
                         int64_t iDirection, int64_t iAxis, int64_t iNorm,
                         Result<dtype> y) {
 
-  CCO::CollectiveOps ops;
   AXIS axis = static_cast<AXIS>(iAxis);
   DIRECTION direction = static_cast<DIRECTION>(iDirection);
   NORM norm = static_cast<NORM>(iNorm);
@@ -43,15 +83,16 @@ ffi::Error ButterFlyFFT(cudaStream_t stream, Buffer<DataType::F32> x,
   auto tensor_s = matx::make_tensor(x.typed_data(), dims);
   auto tensor_d = matx::make_tensor(y->typed_data(), dims);
   CCO::ReductionOp reduc_op{CCO::ReducType::SUM};
-  
-  auto comm_iter = 
 
-  for (ncclComm_t comm : butterfly_comm) {
-    ops.allreduce(x.typed_data(), y->typed_data(), x.element_count(), reduc_op,
-                  comm, stream);
+  switch (direction) {
+  case DIRECTION::FORWARD:
+    return ButterFlyForward(stream, x, norm, y, butterfly_comm);
+  case DIRECTION::INVERSE:
+    return ButterFlyBackward(stream, x, norm, y, butterfly_comm);
+  default:
+    return ffi::Error(XLA_FFI_Error_Code_INTERNAL,
+                      std::string("Un recongnized FFT direction "));
   }
-
-  return ffi_with_cuda_error_check();
 }
 
 XLA_FFI_DEFINE_HANDLER_SYMBOL(ButterFlyFFTHandlerF32,

@@ -4,11 +4,41 @@
 #include "nccl_ops.hpp" // Include the NCCLOps for accessing the main communicator
 #include <cmath>        // For std::log2, std::pow
 #include <cstddef>      // For size_t
+#include <iostream>
 #include <nccl.h>
+#include <optional>  // For std::optional
 #include <stdexcept> // For exceptions
 #include <string>    // For std::to_string
 #include <unordered_map>
 #include <vector>
+
+class CommIterator {
+  std::vector<ncclComm_t> m_comms;
+  std::vector<ncclComm_t>::iterator m_it;
+
+public:
+  // Constructor
+  CommIterator(std::vector<ncclComm_t> comms)
+      : m_comms(comms), m_it(m_comms.begin()) {}
+
+  std::optional<ncclComm_t> next() {
+    if (m_it != m_comms.end()) {
+      return *(m_it++); // Return current element and move to next
+    }
+    return std::nullopt; // No more elements
+  }
+
+  std::optional<ncclComm_t> prev() {
+    if (m_it != m_comms.begin()) {
+      return *(--m_it); // Move to previous element and return
+    }
+    return std::nullopt; // No more elements
+  }
+
+  void reset() { m_it = m_comms.begin(); }
+
+  void reverse() { m_it = m_comms.end(); }
+};
 
 class ButterflyCommIndexImpl {
 public:
@@ -19,13 +49,13 @@ public:
   }
 
   // Function to get or create communicators for FFT
-  std::vector<ncclComm_t> get_or_create_comms(ncclComm_t base_comm) {
+  CommIterator get_or_create_comms(ncclComm_t base_comm) {
     int ranks_per_comm = 0;
     NCCLCHECK(ncclCommCount(base_comm, &ranks_per_comm));
     if (comms_db.find(ranks_per_comm) == comms_db.end()) {
       generate_comms(base_comm, ranks_per_comm);
     }
-    return comms_db[ranks_per_comm];
+    return CommIterator(comms_db[ranks_per_comm]);
   }
 
 private:
@@ -72,8 +102,7 @@ private:
 // Public interface for ButterflyCommIndex
 
 namespace ButterflyCommIndex {
-static inline std::vector<ncclComm_t>
-get_or_create_comms(ncclComm_t base_comm) {
+static inline CommIterator get_or_create_comms(ncclComm_t base_comm) {
   return ButterflyCommIndexImpl::instance().get_or_create_comms(base_comm);
 }
 
