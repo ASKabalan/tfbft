@@ -66,9 +66,9 @@ private:
 // Public interface for NCCL operations
 namespace NCCLOps {
 
-static const int get_rank() { return NCCLOpsImpl::instance().get_rank(); }
+static int get_rank() { return NCCLOpsImpl::instance().get_rank(); }
 
-static const int get_size() { return NCCLOpsImpl::instance().get_size(); }
+static int get_size() { return NCCLOpsImpl::instance().get_size(); }
 
 static ncclComm_t get_comm() { return NCCLOpsImpl::instance().get_comm(); }
 

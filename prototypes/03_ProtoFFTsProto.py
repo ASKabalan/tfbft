@@ -2,7 +2,7 @@ import numpy as np
 
 # Global logging and FFT mode configuration
 LOGGING_LEVEL = 'operations'  # Options: 'operations', 'other', 'both', 'none'
-FFT_MODE = 'dit'       # Options: 'dit', 'dif', 'both'
+FFT_MODE = 'dif'       # Options: 'dit', 'dif', 'both'
 
 def log(message, level='other'):
     if LOGGING_LEVEL == 'both' or LOGGING_LEVEL == level:
@@ -127,7 +127,7 @@ def fft_dit(x):
 
 # Example usage:
 res = {}
-powers_of_2 = [2**i for i in range(5, 10)]
+powers_of_2 = [2**i for i in range(4, 5)]
 dit_f_are_close = "NOT_DONE"
 dif_f_are_close = "NOT_DONE"
 

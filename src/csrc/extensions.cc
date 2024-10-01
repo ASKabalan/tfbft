@@ -17,8 +17,8 @@ template <typename T> nb::capsule EncapsulateFfiCall(T *fn) {
 
 nb::dict Registrations() {
   nb::dict d;
-  // d["all_reduce_nccl"] = EncapsulateFfiCall(AllReduceNCCLF32);
-  // d["all_reduce_mpi"] = EncapsulateFfiCall(AllReduceMPIF32);
+  d["all_reduce_nccl"] = EncapsulateFfiCall(AllReduceNCCLF32);
+  d["all_reduce_mpi"] = EncapsulateFfiCall(AllReduceMPIF32);
   d["butterfly_fft_f32"] = EncapsulateFfiCall(ButterFlyFFTHandlerF32);
   return d;
 }

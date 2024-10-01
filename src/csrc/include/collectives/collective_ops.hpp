@@ -1,14 +1,11 @@
 #ifndef COLLECTIVE_OPS_H
 #define COLLECTIVE_OPS_H
 
-#include "cuda_runtime.h"
 #include "mpi.h"
 #include "nccl.h"
 #include "nccl_ops.hpp"
-#if __has_include("matx.h")
-#define MATX_ENABLE_MATX
-#include "matx.h" // for matx types
-#endif
+#include <cuda/std/complex>
+#include <cuda_runtime.h>
 
 namespace CCO {
 
@@ -17,7 +14,7 @@ enum class ReducType { SUM, PROD, MIN, MAX, CUSTOM };
 template <typename T = float> struct ReductionOp {
   ReductionOp(ReducType type) : type(type) {}
   ReductionOp(T alpha) : type(ReducType::CUSTOM), alpha(alpha) {}
-  const ReducType get_type() const { return type; }
+  ReducType get_type() const { return type; }
 
 private:
   ReducType type = ReducType::SUM;
@@ -47,10 +44,6 @@ REGISTER_NCCL_TYPE(cuda::std::complex<float>, ncclFloat32);
 REGISTER_NCCL_TYPE(cuda::std::complex<double>, ncclFloat64);
 REGISTER_NCCL_TYPE(__half, ncclFloat16);
 REGISTER_NCCL_TYPE(__nv_bfloat16, ncclBfloat16);
-#ifdef MATX_ENABLE_MATX
-REGISTER_NCCL_TYPE(matx::matxFp16, ncclFloat16);
-REGISTER_NCCL_TYPE(matx::matxBf16, ncclBfloat16);
-#endif
 
 template <typename T> MPI_Op get_mpi_op(ReductionOp<T> op) {
   switch (op.get_type()) {

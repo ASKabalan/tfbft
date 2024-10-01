@@ -4,31 +4,30 @@
 #include "nccl_ops.hpp" // Include the NCCLOps for accessing the main communicator
 #include <cmath>        // For std::log2, std::pow
 #include <cstddef>      // For size_t
-#include <iostream>
 #include <nccl.h>
 #include <optional>  // For std::optional
-#include <stdexcept> // For exceptions
-#include <string>    // For std::to_string
 #include <unordered_map>
 #include <vector>
 
+typedef std::pair<int, ncclComm_t> StageCommPair;
+
 class CommIterator {
-  std::vector<ncclComm_t> m_comms;
-  std::vector<ncclComm_t>::iterator m_it;
+  std::vector<StageCommPair> m_comms;
+  std::vector<StageCommPair>::iterator m_it;
 
 public:
   // Constructor
-  CommIterator(std::vector<ncclComm_t> comms)
+  CommIterator(std::vector<StageCommPair> comms)
       : m_comms(comms), m_it(m_comms.begin()) {}
 
-  std::optional<ncclComm_t> next() {
+  std::optional<StageCommPair> next() {
     if (m_it != m_comms.end()) {
       return *(m_it++); // Return current element and move to next
     }
     return std::nullopt; // No more elements
   }
 
-  std::optional<ncclComm_t> prev() {
+  std::optional<StageCommPair> prev() {
     if (m_it != m_comms.begin()) {
       return *(--m_it); // Move to previous element and return
     }
@@ -72,15 +71,16 @@ private:
     int rank = 0;
     NCCLCHECK(ncclCommUserRank(base_comm, &rank));
     int num_stages = std::log2(size);
-    std::vector<ncclComm_t> comms_list;
+    std::vector<StageCommPair> comms_list;
 
     // Iterate through the number of stages to create communicators
     for (int stage = 0; stage < num_stages; ++stage) {
       int color = calculate_color(rank, stage, size);
+      int normalising_factor = size / (stage + 1);
       ncclComm_t new_comm;
       NCCLCHECK(ncclCommSplit(base_comm, color, rank, &new_comm, nullptr));
 
-      comms_list.push_back(new_comm);
+      comms_list.push_back(std::make_pair(normalising_factor , new_comm));
     }
 
     // Store the generated communicators in the map
@@ -95,7 +95,7 @@ private:
     return mod_factor + add_factor;
   }
 
-  std::unordered_map<size_t, std::vector<ncclComm_t>>
+  std::unordered_map<size_t, std::vector<StageCommPair>>
       comms_db; // Unordered map to store communicators for each array size
 };
 

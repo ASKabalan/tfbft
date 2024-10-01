@@ -76,9 +76,9 @@ namespace MPIOps {
 
 static MPI_Comm get_comm() { return MPIOpsImpl::instance().get_comm(); }
 
-static const int get_rank() { return MPIOpsImpl::instance().get_rank(); }
+static int get_rank() { return MPIOpsImpl::instance().get_rank(); }
 
-static const int get_size() { return MPIOpsImpl::instance().get_size(); }
+static int get_size() { return MPIOpsImpl::instance().get_size(); }
 
 } // namespace MPIOps
 

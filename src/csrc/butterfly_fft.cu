@@ -2,8 +2,6 @@
 #include "collectives/collective_ops.hpp"
 #include "common/ffi_helper.hpp"
 #include "extensions.h"
-#include "matx.h"
-#include "matx/core/make_tensor.h"
 #include "xla/ffi/api/api.h"
 #include "xla/ffi/api/ffi.h"
 #include <cstddef>
@@ -21,21 +19,36 @@ template <typename T> __global__ void AddElementKernel(T *x, T *y, int n) {
 }
 
 template <DataType dtype>
-ffi::Error ButterFlyForward(cudaStream_t stream, Buffer<DataType::F32> x,
-                            NORM iNorm, Result<dtype> y, CommIterator &comms) {
-
+ffi::Error ButterFlyForward(cudaStream_t stream, Buffer<dtype> x, NORM iNorm,
+                            Result<dtype> y, CommIterator &comms) {
   CCO::CollectiveOps ops;
   CCO::ReductionOp reduc_op{CCO::ReducType::SUM};
-  auto comm = comms.next();
-  assertm(comm.has_value(),
+  auto stageComm = comms.next();
+  assertm(stageComm.has_value(),
           "[INTERNAL] Distributed FFT called without Buttefly comms");
 
-  ops.allreduce(x.typed_data(), y->typed_data(), x.element_count(), reduc_op,
-                comm.value(), stream);
+  // Get the Stage comm and the N (normalization factor for this stage)
+  auto [N, comm] = stageComm.value();
+  int device_count;
+  NCCLCHECK(ncclCommCount(comm, &device_count));
+  assertm(device_count == 2, "In each step the communication is pairwise");
 
-  while ((comm = comms.next())) {
-    ops.allreduce(y->typed_data(), y->typed_data(), x.element_count(), reduc_op,
-                  comm.value(), stream);
+  // First step A + B
+  ops.reduce(x.typed_data(), y->typed_data(), x.element_count(), reduc_op, 0,
+             comm, stream);
+  // Second step A - B
+  ops.reduce(y->typed_data(), y->typed_data(), y->element_count(), reduc_op, 1,
+             comm, stream);
+
+  // apply the twiddle factor
+
+  // Continue with the rest of the stages
+  while ((stageComm = comms.next())) {
+    auto [N, comm] = stageComm.value();
+    ops.reduce(y->typed_data(), y->typed_data(), y->element_count(), reduc_op,
+               0, comm, stream);
+    ops.reduce(y->typed_data(), y->typed_data(), y->element_count(), reduc_op,
+               1, comm, stream);
   }
   return ffi_with_cuda_error_check();
 }
@@ -51,13 +64,14 @@ ffi::Error ButterFlyBackward(cudaStream_t stream, Buffer<DataType::F32> x,
   assertm(comm.has_value(),
           "[INTERNAL] Distributed IFFT called without Buttefly comms");
 
-  ops.allreduce(x.typed_data(), y->typed_data(), x.element_count(), reduc_op,
-                comm.value(), stream);
-
-  while ((comm = comms.prev())) {
-    ops.allreduce(y->typed_data(), y->typed_data(), x.element_count(), reduc_op,
-                  comm.value(), stream);
-  }
+  // ops.allreduce(x.typed_data(), y->typed_data(), x.element_count(), reduc_op,
+  //               comm.value(), stream);
+  //
+  // while ((comm = comms.prev())) {
+  //   ops.allreduce(y->typed_data(), y->typed_data(), x.element_count(),
+  //   reduc_op,
+  //                 comm.value(), stream);
+  // }
   return ffi_with_cuda_error_check();
 }
 
@@ -75,13 +89,8 @@ ffi::Error ButterFlyFFT(cudaStream_t stream, Buffer<DataType::F32> x,
   ncclComm_t comm = CCO::NCCLOps::get_comm();
   const int &rank = CCO::NCCLOps::get_rank();
   const int &size = CCO::NCCLOps::get_size();
-  matx::index_t dims[3]{1, 1, 1};
-  Dimensions buffer_dims = x.dimensions();
-  std::copy(buffer_dims.begin(), buffer_dims.end(), dims);
 
   auto butterfly_comm = ButterflyCommIndex::get_or_create_comms(comm);
-  auto tensor_s = matx::make_tensor(x.typed_data(), dims);
-  auto tensor_d = matx::make_tensor(y->typed_data(), dims);
   CCO::ReductionOp reduc_op{CCO::ReducType::SUM};
 
   switch (direction) {
@@ -93,6 +102,15 @@ ffi::Error ButterFlyFFT(cudaStream_t stream, Buffer<DataType::F32> x,
     return ffi::Error(XLA_FFI_Error_Code_INTERNAL,
                       std::string("Un recongnized FFT direction "));
   }
+}
+
+template <DataType dtype>
+ffi::Error TestFunc(cudaStream_t stream, Buffer<dtype> x, Result<dtype> y) {
+  int blockSize = 256;
+  int numBlocks = (x.element_count() + blockSize - 1) / blockSize;
+  AddElementKernel<<<numBlocks, blockSize, 0, stream>>>(
+      x.typed_data(), y->typed_data(), x.element_count());
+  return ffi_with_cuda_error_check();
 }
 
 XLA_FFI_DEFINE_HANDLER_SYMBOL(ButterFlyFFTHandlerF32,
