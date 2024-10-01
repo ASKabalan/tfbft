@@ -1,3 +1,0 @@
-[submodule "third_party/MatX"]
-	path = third_party/MatX
-	url = git@github.com:NVIDIA/MatX.git

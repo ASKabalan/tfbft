@@ -18,7 +18,6 @@ set(NVHPC_CUDA_VERSION ${CUDAToolkit_VERSION_MAJOR}.${CUDAToolkit_VERSION_MINOR}
 
 find_package(MPI REQUIRED)
 find_package(NVHPC REQUIRED COMPONENTS MATH NCCL)
-add_subdirectory(third_party/MatX)
 
 string(REPLACE "/lib64" "/include" NVHPC_CUDA_INCLUDE_DIR ${NVHPC_CUDA_LIBRARY_DIR})
 string(REPLACE "/lib64" "/include" NVHPC_MATH_INCLUDE_DIR ${NVHPC_MATH_LIBRARY_DIR})
@@ -44,7 +43,7 @@ set(SOURCES src/csrc/extensions.cc src/csrc/butterfly_fft.cu src/csrc/bit_revers
 # nanobind_add_module(gpu_ops STABLE_ABI NB_STATIC ${SOURCES})
 nanobind_add_module(butterfly_fft_lib SHARED ${SOURCES})
 set_target_properties(butterfly_fft_lib PROPERTIES CUDA_ARCHITECTURES "70;80;89")
-target_link_libraries(butterfly_fft_lib  PRIVATE NVHPC::CUDA MPI::MPI_CXX NVHPC::NCCL matx::matx)
+target_link_libraries(butterfly_fft_lib  PRIVATE NVHPC::CUDA MPI::MPI_CXX NVHPC::NCCL)
 target_include_directories(butterfly_fft_lib PUBLIC 
                            src/csrc/include
                            ${XLA_DIR}
