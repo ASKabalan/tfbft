@@ -18,8 +18,12 @@ nb::capsule EncapsulateFfiCall(T *fn) {
 
 nb::dict Registrations() {
     nb::dict d;
-    // d["all_reduce_nccl"] = EncapsulateFfiCall(AllReduceNCCLF32);
-    // d["all_reduce_mpi"] = EncapsulateFfiCall(AllReduceMPIF32);
+    d["all_reduce_nccl"] = EncapsulateFfiCall(AllReduceNCCLF32);
+    d["all_reduce_mpi"] = EncapsulateFfiCall(AllReduceMPIF32);
+    d["bit_reverse_f32"] = EncapsulateFfiCall(BitReverseHandlerF32);
+    d["bit_reverse_f64"] = EncapsulateFfiCall(BitReverseHandlerF64);
+    d["bit_reverse_c64"] = EncapsulateFfiCall(BitReverseHandlerC64);
+    d["bit_reverse_c128"] = EncapsulateFfiCall(BitReverseHandlerC128);
     d["butterfly_fft_c64"] = EncapsulateFfiCall(ButterFlyFFTHandlerC64);
     d["butterfly_fft_c128"] = EncapsulateFfiCall(ButterFlyFFTHandlerC128);
     return d;

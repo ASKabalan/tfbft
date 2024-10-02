@@ -28,4 +28,7 @@ XLA_FFI_DECLARE_HANDLER_TYPES(AllReduceMPI);
 // FFTs
 XLA_FFI_DECLARE_HANDLER_TYPES(ButterFlyFFTHandler);
 
+// Bit Reversal
+XLA_FFI_DECLARE_HANDLER_TYPES(BitReverseHandler);
+
 #endif  // GPU_OPS_H_
