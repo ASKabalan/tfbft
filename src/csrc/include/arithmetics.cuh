@@ -2,6 +2,9 @@
 
 using namespace cute;
 
+#define CUDART_PI_F             3.141592654f
+#define CUDART_PI               3.1415926535897931e+0
+
 template <typename T>
 __device__ T cosine(T x);
 
@@ -65,7 +68,7 @@ __global__ void ApplyTwiddle(TensorS S, int dim, int factor, int butterfly_rank,
     // Twiddle factor exp (- 2 pi * k / N)  where is a range from 0 to to (N/2 - 1) and N is dim/factor
     // the range is split among the ranks .. so the first rank will get
 
-    // auto twiddle = Element{cosine(2 * M_PI * k / N), -sine(2 * M_PI * k / N)};
+    auto twiddle = Element{cosine(2 * CUDART_PI_F * k / N), - sine(2 * CUDART_PI_F * k / N)};
     // Apply the twiddle factor
-    // transform(thr_tile, [&twiddle](auto x) { return x * twiddle; });
+    transform(thr_tile, [&twiddle](auto x) { return x * twiddle; });
 }

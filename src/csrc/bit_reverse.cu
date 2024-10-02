@@ -66,7 +66,8 @@ ffi::Error bit_reverse_tensor(cudaStream_t stream , ffi::Buffer<T> &buffer)
   dim3 gridDim(size<1>(tiled_tensor), size<2>(tiled_tensor), size<3>(tiled_tensor));
   dim3 blockDim(shape<0>(thread_layout), shape<1>(thread_layout), shape<2>(thread_layout));
 
-  bit_reverse<<<gridDim, blockDim, 0, stream>>>(tiled_tensor, thread_layout);
+  // bit_reverse<<<gridDim, blockDim, 0, stream>>>(tiled_tensor, thread_layout);
+  return ffi::Error::Success();
 }
 
 

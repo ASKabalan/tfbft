@@ -20,9 +20,7 @@ using namespace cute;
 template <typename T>
 using cuteComplex = cutlass::complex<T>;
 
-int compute_a_rank(int device_rank, int stage_size) {
-    return device_rank + stage_size * ((device_rank / stage_size) / 2);
-}
+
 int compute_b_rank(int device_rank, int stage_size) {
     return device_rank - stage_size * (1 + (device_rank / stage_size) / 2);
 }
@@ -44,9 +42,8 @@ ffi::Error ButterFlyForward(cudaStream_t stream, Buffer<dtype> x, NORM iNorm, Re
     auto tensor_shape = make_shape(dims[0], dims[1], dims[2]);
     auto x_ptr = reinterpret_cast<Complex *>(x.typed_data());
     auto y_ptr = reinterpret_cast<Complex *>(y->typed_data());
-    Tensor tensor_S = make_tensor(make_gmem_ptr(x_ptr), make_layout(tensor_shape));
-    Tensor tensor_D = make_tensor(make_gmem_ptr(y_ptr), make_layout(tensor_shape));
-    using TensorType = typename decltype(tensor_S)::value_type;
+    Tensor tensor_S = make_tensor(x_ptr, make_layout(tensor_shape));
+    Tensor tensor_D = make_tensor(y_ptr, make_layout(tensor_shape));
     // Create the kernel configuration and the tiled tensor
     auto block_shape = Shape<_2, _2, _2>{};
     Layout thread_layout = make_layout(Shape<_2, _2, _2>{});  // 256 threads one thread per element
@@ -81,13 +78,8 @@ ffi::Error ButterFlyForward(cudaStream_t stream, Buffer<dtype> x, NORM iNorm, Re
     if (stage_rank == 1) {
         int b_rank = compute_b_rank(device_rank, stage_size);
         std::cout << "Twiddle for B rank " << b_rank << std::endl;
-        // ApplyTwiddle<<<gridDim, blockDim, 0, stream>>>(tiled_tensor_S, global_axis_size, N, device_rank,
-        // device_count, thread_layout);
-    } else {
-        int a_rank = compute_a_rank(device_rank, stage_size);
-        std::cout << "Twiddle for A rank " << a_rank << std::endl;
-        // ApplyTwiddle<<<gridDim, blockDim, 0, stream>>>(tiled_tensor_S, global_axis_size, N, device_rank,
-        // device_count, thread_layout);
+        ApplyTwiddle<<<gridDim, blockDim, 0, stream>>>(tiled_tensor_S, global_axis_size, factor, b_rank,
+        device_count, thread_layout);
     }
 
     // Continue with the rest of the stages
@@ -107,7 +99,7 @@ ffi::Error ButterFlyForward(cudaStream_t stream, Buffer<dtype> x, NORM iNorm, Re
         ncclReduce(y->untyped_data(), y->untyped_data(), x.element_count(), ncclFloat, ncclSum, 0, comm, stream);
         // Second step -2B + (A + B) = A - B
         if (stage_rank == 1) {
-            Multiply<<<gridDim, blockDim, 0, stream>>>(tiled_tensor_S, tiled_tensor_D, (TensorType)-2, thread_layout);
+            Multiply<<<gridDim, blockDim, 0, stream>>>(tiled_tensor_S, tiled_tensor_D, Complex{-2 , 0}, thread_layout);
         }
         ncclReduce(y->untyped_data(), y->untyped_data(), x.element_count(), ncclFloat, ncclSum, 1, comm, stream);
 
