@@ -1,9 +1,10 @@
+#pragma once
+
+#include "extensions.h"
 #include <cute/tensor.hpp>
+#include <math_constants.h>
 
 using namespace cute;
-
-#define CUDART_PI_F             3.141592654f
-#define CUDART_PI               3.1415926535897931e+0
 
 template <typename T>
 __device__ T cosine(T x);
@@ -31,9 +32,23 @@ __device__ double sine(double x) {
     return ::sin(x);
 }
 
+template <typename T>
+__device__ T pi();
+
+template <>
+__device__ float pi() {
+    return CUDART_PI_F;
+}
+
+template <>
+__device__ double pi() {
+    return CUDART_PI;
+}
+
 template <class TensorS, class ThreadLayout>
 __global__ void Multiply(TensorS S, typename TensorS::value_type alpha, ThreadLayout) {
-    int local_index = threadIdx.x + stride<1>(ThreadLayout{}) * threadIdx.y + stride<2>(ThreadLayout{}) * threadIdx.z;
+    int local_index =
+            threadIdx.x + stride<1>(ThreadLayout{}) * threadIdx.y + stride<2>(ThreadLayout{}) * threadIdx.z;
     Tensor local_tile = S(make_coord(_, _, _), blockIdx.x, blockIdx.y, blockIdx.z);
     Tensor thr_tile = local_partition(local_tile, ThreadLayout{}, local_index);
 
@@ -42,8 +57,8 @@ __global__ void Multiply(TensorS S, typename TensorS::value_type alpha, ThreadLa
 
 template <class TensorS, class TensorD, class ThreadLayout>
 __global__ void Multiply(TensorS S, TensorD D, typename TensorS::value_type alpha, ThreadLayout) {
-
-    int local_index = threadIdx.x + stride<1>(ThreadLayout{}) * threadIdx.y + stride<2>(ThreadLayout{}) * threadIdx.z;
+    int local_index =
+            threadIdx.x + stride<1>(ThreadLayout{}) * threadIdx.y + stride<2>(ThreadLayout{}) * threadIdx.z;
 
     Tensor local_tile = S(make_coord(_, _, _), blockIdx.x, blockIdx.y, blockIdx.z);
     Tensor thr_tile_S = local_partition(local_tile, ThreadLayout{}, local_index);
@@ -54,11 +69,14 @@ __global__ void Multiply(TensorS S, TensorD D, typename TensorS::value_type alph
     transform(thr_tile_S, thr_tile_D, [&alpha](auto x) { return x * alpha; });
 }
 
-template <class TensorS, class ThreadLayout>
-__global__ void ApplyTwiddle(TensorS S, int dim, int factor, int butterfly_rank, int device_count, ThreadLayout) {
+template <DIRECTION dir, class TensorS, class ThreadLayout>
+__global__ void ApplyTwiddle(TensorS S, int dim, int factor, int butterfly_rank, int device_count,
+                             ThreadLayout) {
     using Element = typename TensorS::value_type;
+    using Real = typename Element::value_type;
 
-    int local_index = threadIdx.x + stride<1>(ThreadLayout{}) * threadIdx.y + stride<2>(ThreadLayout{}) * threadIdx.z;
+    int local_index =
+            threadIdx.x + stride<1>(ThreadLayout{}) * threadIdx.y + stride<2>(ThreadLayout{}) * threadIdx.z;
     Tensor local_tile = S(make_coord(_, _, _), blockIdx.x, blockIdx.y, blockIdx.z);
     Tensor thr_tile = local_partition(local_tile, ThreadLayout{}, local_index);
 
@@ -68,7 +86,8 @@ __global__ void ApplyTwiddle(TensorS S, int dim, int factor, int butterfly_rank,
     // Twiddle factor exp (- 2 pi * k / N)  where is a range from 0 to to (N/2 - 1) and N is dim/factor
     // the range is split among the ranks .. so the first rank will get
 
-    auto twiddle = Element{cosine(2 * CUDART_PI_F * k / N), - sine(2 * CUDART_PI_F * k / N)};
+    int exponent_sign = (dir == DIRECTION::FORWARD) ? -1 : 1;
+    auto twiddle = Element{cosine(2 * pi<Real>() * k / N), exponent_sign * sine(2 * pi<Real>() * k / N)};
     // Apply the twiddle factor
     transform(thr_tile, [&twiddle](auto x) { return x * twiddle; });
 }
