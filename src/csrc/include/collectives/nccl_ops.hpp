@@ -27,9 +27,9 @@ public:
     return instance;
   }
 
-  int get_rank() const { return rank; }
+  int get_rank() const { return m_rank; }
 
-  int get_size() const { return size; }
+  int get_size() const { return m_size; }
 
   ncclComm_t get_comm() const { return m_comm; }
 
@@ -40,7 +40,7 @@ public:
   }
 
 private:
-  NCCLOpsImpl() : rank(-1), size(-1), isInitialized(false) {
+  NCCLOpsImpl() : m_rank(-1), m_size(-1), isInitialized(false) {
     // Initialize NCCL rank and size
     const int &rank = MPIOps::get_rank();
     const int &size = MPIOps::get_size();
@@ -50,6 +50,14 @@ private:
       ncclGetUniqueId(&id);
     MPI_Bcast(&id, sizeof(id), MPI_BYTE, 0, mpicomm);
     ncclCommInitRank(&m_comm, size, id, rank);
+    m_rank = rank;
+    m_size = size;
+    int root, count;
+    ncclCommUserRank(m_comm, &root);
+    ncclCommCount(m_comm, &count);
+    std::cout << "NCCL Rank: " << m_rank << " NCCL Size: " << m_size
+              << " NCCL Root: " << root << " NCCL Count: " << count
+              << std::endl;
     isInitialized = true;
   }
 
@@ -57,8 +65,8 @@ private:
   NCCLOpsImpl(const NCCLOpsImpl &) = delete;
   NCCLOpsImpl &operator=(const NCCLOpsImpl &) = delete;
 
-  int rank;
-  int size;
+  int m_rank;
+  int m_size;
   bool isInitialized;
   ncclComm_t m_comm;
 };

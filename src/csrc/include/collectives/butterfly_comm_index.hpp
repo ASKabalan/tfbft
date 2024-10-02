@@ -9,8 +9,8 @@
 #include <unordered_map>
 #include <vector>
 
-typedef std::pair<int, ncclComm_t> StageCommPair;
 
+typedef std::pair<int, ncclComm_t> StageCommPair;
 class CommIterator {
   std::vector<StageCommPair> m_comms;
   std::vector<StageCommPair>::iterator m_it;
@@ -76,7 +76,7 @@ private:
     // Iterate through the number of stages to create communicators
     for (int stage = 0; stage < num_stages; ++stage) {
       int color = calculate_color(rank, stage, size);
-      int normalising_factor = size / (stage + 1);
+      int normalising_factor = std::pow(2, (stage + 1));
       ncclComm_t new_comm;
       NCCLCHECK(ncclCommSplit(base_comm, color, rank, &new_comm, nullptr));
 
