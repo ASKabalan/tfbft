@@ -19,7 +19,7 @@ local_shape = (4 ,16 , 16)
 a = jax.make_array_from_callback(
     shape=global_shape,
     sharding=sharding,
-    data_callback=lambda _: jnp.ones(local_shape, dtype=jnp.float32) * (rank + 1))
+    data_callback=lambda _: jnp.ones(local_shape, dtype=jnp.complex64) * (rank + 1))
 
 
 @partial(shard_map , mesh=mesh ,in_specs=P('x'), out_specs=P('x') , check_rep=False)

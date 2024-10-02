@@ -1,10 +1,11 @@
 #include "extensions.h"
 #include <cute/tensor.hpp>
-// #include <cute/layout.hpp>
-// #include <cute/stride.hpp>
-#include "cute/algorithm/tensor_algorithms.hpp"
-#include "cute/stride.hpp"
+#include <cute/tensor.hpp>
 #include "cute/tensor_impl.hpp"
+#include "cute/stride.hpp"
+#include "cute/algorithm/tensor_algorithms.hpp"
+#include <cute/numeric/complex.hpp>
+#include <cutlass/complex.h>
 #include "arithmetics.cuh"
 #include "collectives/butterfly_comm_index.hpp"
 #include "common/ffi_helper.hpp"
@@ -13,11 +14,26 @@
 #include <nccl.h>
 #include "collectives/nccl_ops.hpp"
 
+
 namespace ffi = xla::ffi;
 using namespace cute;
+template <typename T>
+using cuteComplex = cutlass::complex<T>;
+
+int compute_a_rank(int device_rank, int stage_size) {
+    return device_rank + stage_size * ((device_rank / stage_size) / 2);
+}
+int compute_b_rank(int device_rank, int stage_size) {
+    return device_rank - stage_size * (1 + (device_rank / stage_size) / 2);
+}
 
 template <DataType dtype>
 ffi::Error ButterFlyForward(cudaStream_t stream, Buffer<dtype> x, NORM iNorm, Result<dtype> y, CommIterator &comms) {
+
+    static_assert(ffi::IsComplexType<dtype>(), "Only complex types are supported");
+    using Real = ffi::NativeType<ffi::ToReal(dtype)>;
+    using Complex = cuteComplex<Real>;
+
     const int &device_rank = CCO::NCCLOps::get_rank();
     const int &device_count = CCO::NCCLOps::get_size();
     const int global_axis_size = x.dimensions()[0] * device_count;
@@ -26,14 +42,17 @@ ffi::Error ButterFlyForward(cudaStream_t stream, Buffer<dtype> x, NORM iNorm, Re
     assertm(dims.size() == 3, "Only 3D tensors are supported for now");
     // Create a static rank 3 tensor from the buffer
     auto tensor_shape = make_shape(dims[0], dims[1], dims[2]);
-    Tensor tensor_S = make_tensor(make_gmem_ptr(x.typed_data()), make_layout(tensor_shape));
-    Tensor tensor_D = make_tensor(make_gmem_ptr(y->typed_data()), make_layout(tensor_shape));
+    auto x_ptr = reinterpret_cast<Complex *>(x.typed_data());
+    auto y_ptr = reinterpret_cast<Complex *>(y->typed_data());
+    Tensor tensor_S = make_tensor(make_gmem_ptr(x_ptr), make_layout(tensor_shape));
+    Tensor tensor_D = make_tensor(make_gmem_ptr(y_ptr), make_layout(tensor_shape));
     using TensorType = typename decltype(tensor_S)::value_type;
     // Create the kernel configuration and the tiled tensor
-    auto block_shape = Shape<_64, _4, _4>{};
-    Layout thread_layout = make_layout(Shape<_64, _4, _4>{});  // 256 threads one thread per element
+    auto block_shape = Shape<_2, _2, _2>{};
+    Layout thread_layout = make_layout(Shape<_2, _2, _2>{});  // 256 threads one thread per element
     Tensor tiled_tensor_S = tiled_divide(tensor_S, block_shape);
     Tensor tiled_tensor_D = tiled_divide(tensor_D, block_shape);
+
     // Grid dim is the result of the division of the tensor shape by the block Shape
     // Thread layout is the shape of the block to make sure that each thread is responsible for one element
     dim3 gridDim(size<1>(tiled_tensor_S), size<2>(tiled_tensor_S), size<3>(tiled_tensor_S));
@@ -44,37 +63,60 @@ ffi::Error ButterFlyForward(cudaStream_t stream, Buffer<dtype> x, NORM iNorm, Re
     auto stageComm = comms.next();
     assertm(stageComm.has_value(), "[INTERNAL] Distributed FFT called without Buttefly comms");
     // Get the Stage comm and the N (normalization factor for this stage)
-    auto [N, comm] = stageComm.value();
-    int stage_rank;
+    auto [factor, comm] = stageComm.value();
+    int stage_rank, stage_size(device_count / factor);
     NCCLCHECK(ncclCommUserRank(comm, &stage_rank));
     // First step A + B
     ncclGroupStart();
     ncclReduce(x.untyped_data(), y->untyped_data(), x.element_count(), ncclFloat, ncclSum, 0, comm, stream);
-
     // Second step A - B
-    // First add -2 to B to prepare for => -2B + (A + B) = A - B
+    // First multipy -2 to B to prepare for => -2B + (A + B) = A - B
     if (stage_rank == 1) {
-        Multiply<<<gridDim, blockDim, 0, stream>>>(tiled_tensor_S, tiled_tensor_D, (TensorType)-2, thread_layout);
+        Multiply<<<gridDim, blockDim, 0, stream>>>(tiled_tensor_S, tiled_tensor_D, Complex{-2, 0}, thread_layout);
     }
-    // ncclReduce(y->untyped_data(), y->untyped_data(), x.element_count(), ncclFloat, ncclSum, 1, comm, stream);
-    std::cout << "Reduced " << std::endl;
+    ncclReduce(y->untyped_data(), y->untyped_data(), x.element_count(), ncclFloat, ncclSum, 1, comm, stream);
     // Apply the twiddle factor
     // Check if current device holds the A or B
+    // in DIF only the B ranks are twiddled
     if (stage_rank == 1) {
-        // ApplyTwiddle<<<gridDim, blockDim, 0, stream>>>(tiled_tensor_S, global_axis_size, N, device_rank, device_count, thread_layout);
+        int b_rank = compute_b_rank(device_rank, stage_size);
+        std::cout << "Twiddle for B rank " << b_rank << std::endl;
+        // ApplyTwiddle<<<gridDim, blockDim, 0, stream>>>(tiled_tensor_S, global_axis_size, N, device_rank,
+        // device_count, thread_layout);
+    } else {
+        int a_rank = compute_a_rank(device_rank, stage_size);
+        std::cout << "Twiddle for A rank " << a_rank << std::endl;
+        // ApplyTwiddle<<<gridDim, blockDim, 0, stream>>>(tiled_tensor_S, global_axis_size, N, device_rank,
+        // device_count, thread_layout);
     }
 
     // Continue with the rest of the stages
     while ((stageComm = comms.next())) {
-        auto [N, comm] = stageComm.value();
+        auto [factor, comm] = stageComm.value();
 
-        int stage_rank;
+        int stage_rank, stage_size(device_count / factor);
         int stage_count;
 
         NCCLCHECK(ncclCommUserRank(comm, &stage_rank));
         NCCLCHECK(ncclCommCount(comm, &stage_count));
 
-        std::cout << "For the next stage N " << N << " stage rank " << stage_rank << " stage count " << stage_count << std::endl;
+        std::cout << "For the next stage N " << factor << " stage rank " << stage_rank << " stage count " << stage_count
+                  << std::endl;
+
+        // First step A + B
+        ncclReduce(y->untyped_data(), y->untyped_data(), x.element_count(), ncclFloat, ncclSum, 0, comm, stream);
+        // Second step -2B + (A + B) = A - B
+        if (stage_rank == 1) {
+            Multiply<<<gridDim, blockDim, 0, stream>>>(tiled_tensor_S, tiled_tensor_D, (TensorType)-2, thread_layout);
+        }
+        ncclReduce(y->untyped_data(), y->untyped_data(), x.element_count(), ncclFloat, ncclSum, 1, comm, stream);
+
+        // Apply the twiddle factor
+        // Check if current device holds the A or B
+        if (stage_rank == 1) {
+            int b_rank = compute_b_rank(device_rank, stage_size);
+            std::cout << "Twiddle for B rank " << b_rank << std::endl;
+        }
     }
     ncclGroupEnd();
 
@@ -82,7 +124,7 @@ ffi::Error ButterFlyForward(cudaStream_t stream, Buffer<dtype> x, NORM iNorm, Re
 }
 
 template <DataType dtype>
-ffi::Error ButterFlyBackward(cudaStream_t stream, Buffer<DataType::F32> x, NORM iNorm, Result<dtype> y, CommIterator &comms) {
+ffi::Error ButterFlyBackward(cudaStream_t stream, Buffer<dtype> x, NORM iNorm, Result<dtype> y, CommIterator &comms) {
     comms.reset();
     auto comm = comms.prev();
     assertm(comm.has_value(), "[INTERNAL] Distributed IFFT called without Buttefly comms");
@@ -99,7 +141,11 @@ ffi::Error ButterFlyBackward(cudaStream_t stream, Buffer<DataType::F32> x, NORM 
 }
 
 template <DataType dtype>
-ffi::Error ButterFlyFFT(cudaStream_t stream, Buffer<DataType::F32> x, int64_t iDirection, int64_t iAxis, int64_t iNorm, Result<dtype> y) {
+ffi::Error ButterFlyFFT(cudaStream_t stream, Buffer<dtype> x, int64_t iDirection, int64_t iAxis, int64_t iNorm,
+                        Result<dtype> y) {
+  
+    static_assert(ffi::IsComplexType<dtype>(), "Only complex types are supported");
+    
     AXIS axis = static_cast<AXIS>(iAxis);
     DIRECTION direction = static_cast<DIRECTION>(iDirection);
     NORM norm = static_cast<NORM>(iNorm);
@@ -120,12 +166,12 @@ ffi::Error ButterFlyFFT(cudaStream_t stream, Buffer<DataType::F32> x, int64_t iD
     }
 }
 
-XLA_FFI_DEFINE_HANDLER_SYMBOL(ButterFlyFFTHandlerF32, ButterFlyFFT<DataType::F32>,
+XLA_FFI_DEFINE_HANDLER_SYMBOL(ButterFlyFFTHandlerC64, ButterFlyFFT<DataType::C64>,
                               ffi::Ffi::Bind()
                                       .Ctx<FFI_Stream_Type>()
-                                      .Arg<Buffer<DataType::F32>>()  // x
+                                      .Arg<Buffer<DataType::C64>>()  // x
                                       .Attr<int64_t>("direction")
                                       .Attr<int64_t>("norm")
                                       .Attr<int64_t>("axis")
-                                      .Ret<Buffer<DataType::F32>>()  // y
+                                      .Ret<Buffer<DataType::C64>>()  // y
 );

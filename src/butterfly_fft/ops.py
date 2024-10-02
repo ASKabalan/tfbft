@@ -17,7 +17,7 @@ def all_reduce_nccl(operand):
 
 def all_reduce_mpi(operand):
 
-    assert operand.dtype == jnp.float32, f"operand should be of type float32"
+    assert operand.dtype == jnp.complex64, f"operand should be of type complex64"
 
     out_type = jax.ShapeDtypeStruct(operand.shape, operand.dtype)
 
@@ -29,11 +29,11 @@ def all_reduce_mpi(operand):
 
 def butterfly_fft(operand):
 
-    assert operand.dtype == jnp.float32, f"operand should be of type float32"
+    assert operand.dtype == jnp.complex64, f"operand should be of type complex64"
 
     out_type = jax.ShapeDtypeStruct(operand.shape, operand.dtype)
 
-    return jex.ffi.ffi_call("butterfly_fft_f32",
+    return jex.ffi.ffi_call("butterfly_fft_c64",
                             out_type,
                             operand,
                             direction=1,
