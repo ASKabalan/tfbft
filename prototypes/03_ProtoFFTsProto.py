@@ -2,11 +2,13 @@ import numpy as np
 
 # Global logging and FFT mode configuration
 LOGGING_LEVEL = 'operations'  # Options: 'operations', 'other', 'both', 'none'
-FFT_MODE = 'dif'       # Options: 'dit', 'dif', 'both'
+FFT_MODE = 'dit'  # Options: 'dit', 'dif', 'both'
+
 
 def log(message, level='other'):
     if LOGGING_LEVEL == 'both' or LOGGING_LEVEL == level:
         print(message)
+
 
 def bit_reversal(x):
     N = len(x)
@@ -23,6 +25,7 @@ def bit_reversal(x):
 
     return reversed_x
 
+
 def decimation_in_time(x):
     N = len(x)
     num_stages = int(np.log2(N))
@@ -36,7 +39,8 @@ def decimation_in_time(x):
         log(f"Step: {step}, Half Step: {half_step}", 'operations')
 
         # Indices for the current stage's butterfly operations
-        k = np.arange(0, N, step).reshape(-1, 1)  # Start indices for each group
+        k = np.arange(0, N, step).reshape(-1,
+                                          1)  # Start indices for each group
         j = np.arange(half_step)  # Offsets within each group
 
         log(f"k (start indices for groups):\n{k.flatten()}", 'other')
@@ -55,8 +59,12 @@ def decimation_in_time(x):
             for offset in range(half_step):
                 u_index = k[group_index, 0] + j[offset]
                 t_index = u_index + half_step
-                log(f"[OPERATION] x[{u_index}] = x[{u_index}] + W{offset}/{step} * x[{t_index}]", 'operations')
-                log(f"[OPERATION] x[{t_index}] = x[{u_index}] - W{offset}/{step} * x[{t_index}]", 'operations')
+                log(
+                    f"[OPERATION] x[{u_index}] = x[{u_index}] + W{offset}/{step} * x[{t_index}]",
+                    'operations')
+                log(
+                    f"[OPERATION] x[{t_index}] = x[{u_index}] - W{offset}/{step} * x[{t_index}]",
+                    'operations')
 
         # Update the array in place
         x[k + j] = u + t
@@ -65,6 +73,7 @@ def decimation_in_time(x):
         log(f"x after stage {stage + 1}:\n{x}", 'other')
 
     return x
+
 
 def decimation_in_frequency(x):
     N = len(x)
@@ -75,11 +84,12 @@ def decimation_in_frequency(x):
         step = 2**(num_stages - stage)  # FFT size at this stage
         half_step = step // 2  # Half of the FFT size
 
-        log(f"\n=== Stage {stage + 1} ===", 'other')
-        log(f"Step: {step}, Half Step: {half_step}", 'other')
+        log(f"\n=== Stage {stage + 1} ===", 'operations')
+        log(f"Step: {step}, Half Step: {half_step}", 'operations')
 
         # Indices for the current stage's butterfly operations
-        k = np.arange(0, N, step).reshape(-1, 1)  # Start indices for each group
+        k = np.arange(0, N, step).reshape(-1,
+                                          1)  # Start indices for each group
         j = np.arange(half_step)  # Offsets within each group
 
         log(f"k (start indices for groups):\n{k.flatten()}", 'other')
@@ -98,8 +108,11 @@ def decimation_in_frequency(x):
             for offset in range(half_step):
                 u_index = k[group_index, 0] + j[offset]
                 t_index = u_index + half_step
-                log(f"[OPERATION] x[{u_index}] = x[{u_index}] + x[{t_index}]", 'operations')
-                log(f"[OPERATION] x[{t_index}] = (x[{u_index}] - x[{t_index}]) * W{offset}/{step}", 'operations')
+                log(f"[OPERATION] x[{u_index}] = x[{u_index}] + x[{t_index}]",
+                    'operations')
+                log(
+                    f"[OPERATION] x[{t_index}] = (x[{u_index}] - x[{t_index}]) * W{offset}/{step}",
+                    'operations')
 
         # Update the array in place
         x[k + j] = u + t
@@ -109,6 +122,7 @@ def decimation_in_frequency(x):
 
     return x
 
+
 def fft_dif(x):
     log("=== Decimation in Frequency ===", 'other')
     x = decimation_in_frequency(x)
@@ -117,6 +131,7 @@ def fft_dif(x):
     log(f"\nx after bit reversal:\n{x}", 'other')
     return x
 
+
 def fft_dit(x):
     log("=== Bit Reversal ===", 'other')
     x = bit_reversal(x)
@@ -124,6 +139,7 @@ def fft_dit(x):
 
     log("=== Decimation in Time ===", 'other')
     return decimation_in_time(x)
+
 
 # Example usage:
 res = {}
@@ -156,4 +172,3 @@ for i in powers_of_2:
 
 for key, value in res.items():
     print(f"For N = {key}: dit is {value['dit']} and dif is {value['dif']}")
-
