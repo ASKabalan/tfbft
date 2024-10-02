@@ -19,6 +19,7 @@ CompileFlags:
   Add:
     # Allow variadic CUDA functions
     - "-Xclang=-fcuda-allow-variadic-functions"
+    - "-I../../include"
 
 ---
 
@@ -54,6 +55,7 @@ CompileFlags:
     - "--expt-relaxed-constexpr"
     - "-forward-unknown-to-host-compiler"
     - "-Werror=cross-execution-space-call"
+    - "-noswitcherror"
 Diagnostics:
   Suppress:
     - "variadic_device_fn"
